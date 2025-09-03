@@ -19,9 +19,9 @@ go mod init your-project-name
 
 Then, get the library:
 ```sh
-go get redis-ease
+go get github.com/jackman0925/redis-ease
 ```
-*(Note: This assumes the module path is `redis-ease`. The actual import path will depend on the final repository location.)*
+
 
 ## Quick Start
 
@@ -35,14 +35,19 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"redis-ease" // Use your module path here
+	"github.com/jackman0925/redis-ease"
 )
 
 func main() {
 	// Configure and initialize once
 	config := redis_ease.Config{
-		Addresses: []string{"localhost:6379"},
-		IsCluster: false,
+		Addresses: []string{               
+			"localhost:7000",                                      
+			"localhost:7001",                                      
+			"localhost:7002",                                                       
+		},
+		Password:  "",
+		IsCluster: true,
 	}
 	redis_ease.Init(config)
 

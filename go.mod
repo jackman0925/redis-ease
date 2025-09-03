@@ -1,4 +1,4 @@
-module redis-ease
+module github.com/jackman0925/redis-ease
 
 go 1.23.12
 
