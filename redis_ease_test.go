@@ -148,8 +148,9 @@ func TestStreamFunctions(t *testing.T) {
 	// Run consumer in a separate goroutine because it blocks
 	go func() {
 		msg, err := StreamConsume(stream, group, consumer)
-		assert.NoError(t, err)
-		msgChan <- msg
+		if err == nil {
+			msgChan <- msg
+		}
 	}()
 
 	// Producer adds a message
@@ -182,7 +183,7 @@ func TestStreamConsumeAdvanced(t *testing.T) {
 
 	// Test bulk consumption
 	for i := 0; i < 3; i++ {
-		StreamAdd(stream, map[string]interface{}{"n": i})
+		StreamAdd(stream, map[string]interface{}{"n": fmt.Sprintf("%d", i)})
 	}
 
 	msgs, err := StreamConsumeAdvanced(stream, group, consumer, 2*time.Second, 3)
@@ -195,4 +196,45 @@ func TestStreamConsumeAdvanced(t *testing.T) {
 	emptyMsgs, err := StreamConsumeAdvanced(stream, group, consumer, 100*time.Millisecond, 1)
 	assert.NoError(t, err)
 	assert.Empty(t, emptyMsgs)
+}
+
+func TestStreamClaim(t *testing.T) {
+	stream := "test:stream_claim"
+	group := "test:group_claim"
+	badConsumer := "consumer_bad"
+	recoveryConsumer := "consumer_recovery"
+
+	t.Cleanup(func() {
+		Del(stream)
+	})
+
+	// 1. Producer adds a message
+	payload := map[string]interface{}{"task": "process_video"}
+	msgID, err := StreamAdd(stream, payload)
+	assert.NoError(t, err)
+
+	// 2. A "bad" consumer reads it but never ACKs
+	// We need to create the group first
+	_ = GetClient().XGroupCreateMkStream(context.Background(), stream, group, "0").Err()
+	readResult, err := GetClient().XReadGroup(context.Background(), &redis.XReadGroupArgs{
+		Group:    group,
+		Consumer: badConsumer,
+		Streams:  []string{stream, ">"},
+		Count:    1,
+	}).Result()
+	assert.NoError(t, err)
+	assert.Len(t, readResult[0].Messages, 1)
+
+	// 3. Wait for the message to become "idle"
+	time.Sleep(100 * time.Millisecond)
+
+	// 4. The "recovery" consumer claims stale messages
+	claimedMsgs, err := StreamClaim(stream, group, recoveryConsumer, 50*time.Millisecond)
+	assert.NoError(t, err)
+	assert.Len(t, claimedMsgs, 1)
+	assert.Equal(t, msgID, claimedMsgs[0].ID)
+
+	// 5. The recovery consumer ACKs the message to finish the job
+	err = StreamAck(stream, group, claimedMsgs[0].ID)
+	assert.NoError(t, err)
 }

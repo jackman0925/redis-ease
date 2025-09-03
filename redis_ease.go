@@ -145,6 +145,9 @@ func StreamConsume(streamName, groupName, consumerName string) (*redis.XMessage,
 	}).Result()
 
 	if err != nil {
+		if err == redis.Nil { // This can happen and is not an application error.
+			return nil, err
+		}
 		return nil, err
 	}
 
@@ -195,4 +198,50 @@ func StreamConsumeAdvanced(streamName, groupName, consumerName string, block tim
 func StreamAck(streamName, groupName, messageID string) error {
 	client := GetClient()
 	return client.XAck(context.Background(), streamName, groupName, messageID).Err()
+}
+
+// StreamClaim finds and claims pending messages that have been idle for longer than minIdleTime.
+// This is used to recover messages from crashed consumers.
+func StreamClaim(streamName, groupName, consumerName string, minIdleTime time.Duration) ([]redis.XMessage, error) {
+	client := GetClient()
+	ctx := context.Background()
+
+	// 1. Find all pending messages for the group.
+	// Note: In a high-throughput system, you might want to process this in batches.
+	pendingResult, err := client.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: streamName,
+		Group:  groupName,
+		Start:  "-", // Start of time
+		End:    "+", // End of time
+		Count:  100, // Max number of pending messages to check at once
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var staleIDs []string
+	for _, p := range pendingResult {
+		if p.Idle >= minIdleTime {
+			staleIDs = append(staleIDs, p.ID)
+		}
+	}
+
+	// If no stale messages, we're done.
+	if len(staleIDs) == 0 {
+		return nil, nil
+	}
+
+	// 2. Claim the stale messages.
+	claimResult, err := client.XClaim(ctx, &redis.XClaimArgs{
+		Stream:   streamName,
+		Group:    groupName,
+		Consumer: consumerName,
+		Messages: staleIDs,
+	}).Result()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return claimResult, nil
 }
