@@ -7,6 +7,7 @@ A lightweight, easy-to-use Go library for quick Redis integration. It acts as a 
 -   Simple, configuration-driven setup.
 -   Supports both single-node and Redis Cluster.
 -   **Convenience wrappers** for common commands (`Get`, `Set`, `Del`, etc.).
+-   **Reliable Queues** via Redis Streams with consumer group support.
 -   Provides a global client for easy access anywhere in your project.
 -   Built on the reliable `go-redis/redis/v9`.
 
@@ -103,6 +104,62 @@ The `Config` struct has the following fields:
 -   `DB int`: The database number to use (only for single-node mode).
 -   `IsCluster bool`: Set to `true` for a Redis Cluster connection.
 
+
+See the `API` and `Message Queue` sections below for usage examples.
+
+## Message Queue via Redis Streams
+
+This library provides a simple but powerful message queue implementation using Redis Streams. It supports a producer/consumer model with consumer groups, ensuring that messages are processed reliably.
+
+The typical workflow is:
+1.  A **Producer** adds a message (job) to the stream.
+2.  A **Consumer** in a consumer group reads the message.
+3.  After processing the message, the consumer **acknowledges** it.
+
+This ensures that if a consumer fails while processing, the message can be redelivered to another consumer.
+
+### Producer Example
+
+```go
+// Add a job to the 'orders' queue
+msg := map[string]interface{}{
+    "order_id": 12345,
+    "user_id":  "user-abc",
+}
+msgID, err := redis_ease.StreamAdd("orders", msg)
+if err != nil {
+    panic(err)
+}
+fmt.Printf("Message added to stream 'orders' with ID: %s\n", msgID)
+```
+
+### Consumer Example
+
+```go
+// This would typically run in a background goroutine
+func processOrders() {
+    for {
+        // 1. Read one message from the 'orders' stream.
+        // This will automatically create the stream and group if they don't exist.
+        msg, err := redis_ease.StreamConsume("orders", "processing_group", "consumer_1")
+        if err != nil {
+            fmt.Println("Error consuming from stream:", err)
+            continue
+        }
+
+        // 2. Process the message
+        fmt.Printf("Processing message %s: %v\n", msg.ID, msg.Values)
+        // Your business logic here...
+
+        // 3. Acknowledge the message
+        err = redis_ease.StreamAck("orders", "processing_group", msg.ID)
+        if err != nil {
+            fmt.Println("Error acknowledging message:", err)
+        }
+    }
+}
+```
+
 ### Convenience Functions
 
 These are the recommended way to interact with Redis for most common use cases.
@@ -134,3 +191,14 @@ if err != nil {
     panic(err)
 }
 ```
+
+### Stream (Queue) Functions
+
+-   `StreamAdd(streamName string, values map[string]interface{}) (string, error)`
+-   `StreamConsume(streamName, groupName, consumerName string) (*redis.XMessage, error)`
+-   `StreamConsumeAdvanced(streamName, groupName, consumerName string, block time.Duration, count int64) ([]redis.XMessage, error)`
+-   `StreamAck(streamName, groupName, messageID string) error`
+
+### `GetClient() redis.Cmdable`
+
+For advanced use cases, you can retrieve the underlying `go-redis` client to access features like transactions and scripting.

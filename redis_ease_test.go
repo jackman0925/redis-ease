@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -133,4 +133,66 @@ func TestExists(t *testing.T) {
 	existCount, err = Exists(key)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), existCount)
+}
+
+func TestStreamFunctions(t *testing.T) {
+	stream := "test:stream"
+	group := "test:group"
+	consumer := "test:consumer"
+	msgChan := make(chan *redis.XMessage)
+
+	t.Cleanup(func() {
+		Del(stream)
+	})
+
+	// Run consumer in a separate goroutine because it blocks
+	go func() {
+		msg, err := StreamConsume(stream, group, consumer)
+		assert.NoError(t, err)
+		msgChan <- msg
+	}()
+
+	// Producer adds a message
+	payload := map[string]interface{}{"data": "important-message"}
+	msgID, err := StreamAdd(stream, payload)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, msgID)
+
+	// Wait for the consumer to receive the message
+	consumedMsg := <-msgChan
+
+	// Assertions
+	assert.NotNil(t, consumedMsg)
+	assert.Equal(t, msgID, consumedMsg.ID)
+	assert.Equal(t, "important-message", consumedMsg.Values["data"])
+
+	// Acknowledge the message
+	err = StreamAck(stream, group, consumedMsg.ID)
+	assert.NoError(t, err)
+}
+
+func TestStreamConsumeAdvanced(t *testing.T) {
+	stream := "test:stream_advanced"
+	group := "test:group_advanced"
+	consumer := "test:consumer_advanced"
+
+	t.Cleanup(func() {
+		Del(stream)
+	})
+
+	// Test bulk consumption
+	for i := 0; i < 3; i++ {
+		StreamAdd(stream, map[string]interface{}{"n": i})
+	}
+
+	msgs, err := StreamConsumeAdvanced(stream, group, consumer, 2*time.Second, 3)
+	assert.NoError(t, err)
+	assert.Len(t, msgs, 3)
+	assert.Equal(t, "0", msgs[0].Values["n"])
+	assert.Equal(t, "2", msgs[2].Values["n"])
+
+	// Test timeout
+	emptyMsgs, err := StreamConsumeAdvanced(stream, group, consumer, 100*time.Millisecond, 1)
+	assert.NoError(t, err)
+	assert.Empty(t, emptyMsgs)
 }
