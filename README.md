@@ -197,6 +197,69 @@ func sendUpdate() {
 }
 ```
 
+### 5. Logging Configuration
+
+By default, the library logs informational messages and errors to standard output. You can customize this behavior.
+
+#### Changing the Log Level
+
+You can change the verbosity of the default logger by setting the `LogLevel`.
+
+```go
+config := redis_ease.Config{
+    // ... other settings
+    LogLevel: redis_ease.LogLevelWarn, // Only log warnings and errors
+}
+redis_ease.Init(config)
+```
+
+Available levels: `LogLevelNone`, `LogLevelError`, `LogLevelWarn`, `LogLevelInfo`, `LogLevelDebug`.
+
+#### Using a Custom Logger
+
+For more advanced logging, you can provide your own logger that implements the `redis_ease.Logger` interface. This is useful for integrating with your application's existing logging setup (e.g., using `logrus`, `zap`, etc.).
+
+```go
+import (
+    "github.com/sirupsen/logrus"
+    "github.com/jackman0925/redis-ease"
+)
+
+// Create a custom logger that wraps logrus
+type MyLogger struct {
+    *logrus.Logger
+}
+func (l *MyLogger) Errorf(format string, v ...interface{}) { l.Errorf(format, v...) }
+func (l *MyLogger) Warnf(format string, v ...interface{})  { l.Warnf(format, v...) }
+func (l *MyLogger) Infof(format string, v ...interface{})  { l.Infof(format, v...) }
+func (l *MyLogger) Debugf(format string, v ...interface{}) { l.Debugf(format, v...) }
+
+
+func main() {
+    // Create a new logrus logger
+    logrusLogger := logrus.New()
+    logrusLogger.SetFormatter(&logrus.JSONFormatter{})
+
+    config := redis_ease.Config{
+        // ... other settings
+        Logger: &MyLogger{logrusLogger},
+    }
+    redis_ease.Init(config)
+}
+```
+
+#### Disabling Logging
+
+To disable logging completely, set the log level to `LogLevelNone`.
+
+```go
+config := redis_ease.Config{
+    // ... other settings
+    LogLevel: redis_ease.LogLevelNone,
+}
+redis_ease.Init(config)
+```
+
 ## 📚 API Reference
 
 ### Initialization

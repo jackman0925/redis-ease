@@ -4,11 +4,73 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
+
+// LogLevel represents the level of logging.
+type LogLevel int
+
+const (
+	// LogLevelNone disables logging.
+	LogLevelNone LogLevel = iota
+	// LogLevelError logs only errors.
+	LogLevelError
+	// LogLevelWarn logs warnings and errors.
+	LogLevelWarn
+	// LogLevelInfo logs info, warnings, and errors.
+	LogLevelInfo
+	// LogLevelDebug logs all messages including debug.
+	LogLevelDebug
+)
+
+// Logger defines the interface for logging. This allows users to use their own logger.
+type Logger interface {
+	Errorf(format string, v ...interface{})
+	Warnf(format string, v ...interface{})
+	Infof(format string, v ...interface{})
+	Debugf(format string, v ...interface{})
+}
+
+// leveledLogger is a simple internal logger that writes to stdout.
+type leveledLogger struct {
+	level LogLevel
+}
+
+func (l *leveledLogger) Errorf(format string, v ...interface{}) {
+	if l.level >= LogLevelError {
+		log.Printf("[ERROR] "+format, v...)
+	}
+}
+
+func (l *leveledLogger) Warnf(format string, v ...interface{}) {
+	if l.level >= LogLevelWarn {
+		log.Printf("[WARN] "+format, v...)
+	}
+}
+
+func (l *leveledLogger) Infof(format string, v ...interface{}) {
+	if l.level >= LogLevelInfo {
+		log.Printf("[INFO] "+format, v...)
+	}
+}
+
+func (l *leveledLogger) Debugf(format string, v ...interface{}) {
+	if l.level >= LogLevelDebug {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
+
+// discardLogger is a logger that outputs nothing.
+type discardLogger struct{}
+
+func (l *discardLogger) Errorf(format string, v ...interface{}) {}
+func (l *discardLogger) Warnf(format string, v ...interface{})  {}
+func (l *discardLogger) Infof(format string, v ...interface{})  {}
+func (l *discardLogger) Debugf(format string, v ...interface{}) {}
 
 // Config holds the configuration for the Redis client.
 type Config struct {
@@ -21,20 +83,46 @@ type Config struct {
 	DB int
 	// IsCluster indicates whether to connect to a Redis Cluster.
 	IsCluster bool
+	// Logger is the logger to use. If nil, a default logger that writes to stdout is used.
+	Logger Logger
+	// LogLevel is the level of logging to use. Defaults to LogLevelInfo.
+	LogLevel LogLevel
 }
 
 var (
 	client redis.Cmdable
 	once   sync.Once
+	// Provide a default logger out of the box.
+	logger Logger = &leveledLogger{level: LogLevelInfo}
 )
 
 // Init initializes the Redis client. It should be called only once at the start of the application.
 // It panics if the configuration is invalid or if it fails to connect to Redis.
 func Init(cfg Config) {
 	once.Do(func() {
+		// Set up the logger
+		if cfg.Logger != nil {
+			logger = cfg.Logger
+		} else {
+			if cfg.LogLevel == LogLevelNone {
+				logger = &discardLogger{}
+			} else if l, ok := logger.(*leveledLogger); ok {
+				// If user didn't provide a logger, set the level on the default leveled logger
+				if cfg.LogLevel > LogLevelDebug {
+					l.level = LogLevelInfo // Default to info if not set or invalid
+				} else {
+					l.level = cfg.LogLevel
+				}
+			}
+		}
+
+		logger.Infof("Initializing redis-ease...")
+
 		var err error
 		if cfg.IsCluster {
+			logger.Debugf("Cluster mode enabled with addresses: %v", cfg.Addresses)
 			if len(cfg.Addresses) == 0 {
+				logger.Errorf("Cluster mode requires at least one address")
 				panic("redis-ease: cluster mode requires at least one address")
 			}
 			clusterClient := redis.NewClusterClient(&redis.ClusterOptions{
@@ -44,13 +132,16 @@ func Init(cfg Config) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err = clusterClient.Ping(ctx).Err(); err != nil {
+				logger.Errorf("Failed to connect to redis cluster: %v", err)
 				panic(fmt.Sprintf("redis-ease: failed to connect to redis cluster: %v", err))
 			}
 			client = clusterClient
 		} else {
 			if len(cfg.Addresses) != 1 {
+				logger.Errorf("Single node mode requires exactly one address, but %d were provided", len(cfg.Addresses))
 				panic("redis-ease: single node mode requires exactly one address")
 			}
+			logger.Debugf("Single-node mode enabled with address: %s", cfg.Addresses[0])
 			singleClient := redis.NewClient(&redis.Options{
 				Addr:     cfg.Addresses[0],
 				Password: cfg.Password,
@@ -59,10 +150,12 @@ func Init(cfg Config) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err = singleClient.Ping(ctx).Err(); err != nil {
+				logger.Errorf("Failed to connect to redis: %v", err)
 				panic(fmt.Sprintf("redis-ease: failed to connect to redis: %v", err))
 			}
 			client = singleClient
 		}
+		logger.Infof("redis-ease initialized successfully.")
 	})
 }
 
@@ -124,6 +217,7 @@ func Publish(channel string, message interface{}) error {
 // Note: This function will panic if the underlying client is not a *redis.Client or *redis.ClusterClient.
 func Subscribe(ctx context.Context, channel string, handler func(msg *redis.Message)) {
 	c := GetClient()
+	logger.Debugf("Subscribing to channel: %s", channel)
 
 	var pubsub *redis.PubSub
 	switch c := c.(type) {
@@ -133,24 +227,29 @@ func Subscribe(ctx context.Context, channel string, handler func(msg *redis.Mess
 		pubsub = c.Subscribe(ctx, channel)
 	default:
 		// This should not happen with the current Init logic
-		panic("redis-ease: unsupported client type for Subscribe")
+		errMsg := "redis-ease: unsupported client type for Subscribe"
+		logger.Errorf(errMsg)
+		panic(errMsg)
 	}
 
 	go func() {
 		defer pubsub.Close()
-
 		ch := pubsub.Channel()
+		logger.Infof("Started subscriber goroutine for channel: %s", channel)
 
 		for {
 			select {
 			case <-ctx.Done():
 				// Context cancelled, time to exit.
+				logger.Infof("Context cancelled for channel %s. Shutting down subscriber.", channel)
 				return
 			case msg, ok := <-ch:
 				if !ok {
 					// Channel was closed.
+					logger.Warnf("Pub/Sub channel %s was closed.", channel)
 					return
 				}
+				logger.Debugf("Received message on channel %s", msg.Channel)
 				handler(msg)
 			}
 		}
@@ -192,9 +291,11 @@ func StreamConsume(streamName, groupName, consumerName string) (*redis.XMessage,
 	}).Result()
 
 	if err != nil {
-		if errors.Is(err, redis.Nil) { // This can happen and is not an application error.
+		if errors.Is(err, redis.Nil) {
+			logger.Debugf("StreamConsume on %s timed out as expected.", streamName)
 			return nil, err
 		}
+		logger.Warnf("Error consuming from stream %s: %v", streamName, err)
 		return nil, err
 	}
 
@@ -229,8 +330,10 @@ func StreamConsumeAdvanced(streamName, groupName, consumerName string, block tim
 
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
+			logger.Debugf("StreamConsumeAdvanced on %s timed out as expected.", streamName)
 			return nil, nil // A timeout occurred, return as documented
 		}
+		logger.Warnf("Error in StreamConsumeAdvanced for stream %s: %v", streamName, err)
 		return nil, err // Other, unexpected errors
 	}
 
@@ -263,6 +366,7 @@ func StreamClaim(streamName, groupName, consumerName string, minIdleTime time.Du
 		Count:  100, // Max number of pending messages to check at once
 	}).Result()
 	if err != nil {
+		logger.Errorf("Failed to check for pending messages in stream %s: %v", streamName, err)
 		return nil, err
 	}
 
@@ -275,8 +379,10 @@ func StreamClaim(streamName, groupName, consumerName string, minIdleTime time.Du
 
 	// If no stale messages, we're done.
 	if len(staleIDs) == 0 {
+		logger.Debugf("No stale messages to claim in stream %s.", streamName)
 		return nil, nil
 	}
+	logger.Infof("Found %d stale messages to claim in stream %s.", len(staleIDs), streamName)
 
 	// 2. Claim the stale messages.
 	claimResult, err := client.XClaim(ctx, &redis.XClaimArgs{
@@ -287,8 +393,10 @@ func StreamClaim(streamName, groupName, consumerName string, minIdleTime time.Du
 	}).Result()
 
 	if err != nil {
+		logger.Errorf("Failed to claim stale messages in stream %s: %v", streamName, err)
 		return nil, err
 	}
 
+	logger.Infof("Successfully claimed %d messages for consumer %s.", len(claimResult), consumerName)
 	return claimResult, nil
 }
