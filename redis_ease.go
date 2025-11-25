@@ -2,6 +2,7 @@ package redis_ease
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -191,7 +192,7 @@ func StreamConsume(streamName, groupName, consumerName string) (*redis.XMessage,
 	}).Result()
 
 	if err != nil {
-		if err == redis.Nil { // This can happen and is not an application error.
+		if errors.Is(err, redis.Nil) { // This can happen and is not an application error.
 			return nil, err
 		}
 		return nil, err
@@ -227,7 +228,7 @@ func StreamConsumeAdvanced(streamName, groupName, consumerName string, block tim
 	}).Result()
 
 	if err != nil {
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			return nil, nil // A timeout occurred, return as documented
 		}
 		return nil, err // Other, unexpected errors
