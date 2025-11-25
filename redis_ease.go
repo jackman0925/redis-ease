@@ -110,6 +110,52 @@ func Exists(keys ...string) (int64, error) {
 	return GetClient().Exists(context.Background(), keys...).Result()
 }
 
+// --- Pub/Sub Functions ---
+
+// Publish sends a message to a given channel.
+func Publish(channel string, message interface{}) error {
+	return GetClient().Publish(context.Background(), channel, message).Err()
+}
+
+// Subscribe listens for messages on a given channel and calls the handler function for each message.
+// This function starts a new goroutine for the subscription. The provided context can be used to
+// cancel the subscription and exit the goroutine.
+// Note: This function will panic if the underlying client is not a *redis.Client or *redis.ClusterClient.
+func Subscribe(ctx context.Context, channel string, handler func(msg *redis.Message)) {
+	c := GetClient()
+
+	var pubsub *redis.PubSub
+	switch c := c.(type) {
+	case *redis.Client:
+		pubsub = c.Subscribe(ctx, channel)
+	case *redis.ClusterClient:
+		pubsub = c.Subscribe(ctx, channel)
+	default:
+		// This should not happen with the current Init logic
+		panic("redis-ease: unsupported client type for Subscribe")
+	}
+
+	go func() {
+		defer pubsub.Close()
+
+		ch := pubsub.Channel()
+
+		for {
+			select {
+			case <-ctx.Done():
+				// Context cancelled, time to exit.
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					// Channel was closed.
+					return
+				}
+				handler(msg)
+			}
+		}
+	}()
+}
+
 // --- Stream (Queue) Functions ---
 
 // StreamAdd adds a message to a Redis Stream.

@@ -146,6 +146,57 @@ func recoverFailedMessages() {
 }
 ```
 
+### 4. Pub/Sub (Publish-Subscribe)
+
+Use the Pub/Sub functions for real-time messaging between different parts of your application.
+
+#### Subscriber Example
+
+The `Subscribe` function runs in a background goroutine and will automatically reconnect if the connection is lost. You can use a `context` to manage its lifecycle.
+
+```go
+import (
+    "context"
+    "fmt"
+    "time"
+    "github.com/jackman0925/redis-ease"
+    "github.com/redis/go-redis/v9"
+)
+
+func listenForUpdates() {
+    // Create a context that can be cancelled.
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    fmt.Println("Subscribing to 'news' channel...")
+    
+    // The handler function will be called for each message.
+    handler := func(msg *redis.Message) {
+        fmt.Printf("Received message from channel '%s': %s\n", msg.Channel, msg.Payload)
+    }
+
+    // Subscribe to the channel. This starts a non-blocking goroutine.
+    redis_ease.Subscribe(ctx, "news", handler)
+
+    // Keep the main goroutine alive to listen for messages.
+    // In a real application, this would be part of your application's lifecycle.
+    time.Sleep(1 * time.Minute) 
+}
+```
+
+#### Publisher Example
+
+```go
+import "github.com/jackman0925/redis-ease"
+
+func sendUpdate() {
+    err := redis_ease.Publish("news", "A new blog post has been published!")
+    if err != nil {
+        panic(err)
+    }
+}
+```
+
 ## 📚 API Reference
 
 ### Initialization
@@ -160,6 +211,11 @@ func recoverFailedMessages() {
 -   `HSet(key string, values ...interface{}) (int64, error)`
 -   `HGet(key, field string) (string, error)`
 -   `Exists(keys ...string) (int64, error)`
+
+### Pub/Sub Functions
+
+-   `Publish(channel string, message interface{}) error`: Publishes a message to a channel.
+-   `Subscribe(ctx context.Context, channel string, handler func(msg *redis.Message))`: Subscribes to a channel and processes messages with a handler function. Runs in a background goroutine.
 
 ### Stream (Queue) Functions
 

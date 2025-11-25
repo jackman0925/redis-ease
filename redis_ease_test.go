@@ -135,6 +135,35 @@ func TestExists(t *testing.T) {
 	assert.Equal(t, int64(1), existCount)
 }
 
+func TestPubSub(t *testing.T) {
+	channel := "test:pubsub"
+	message := "hello pubsub"
+	received := make(chan string, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handler := func(msg *redis.Message) {
+		received <- msg.Payload
+	}
+
+	Subscribe(ctx, channel, handler)
+
+	// It might take a moment for the subscription to activate.
+	// In a real-world scenario with many subscribers, you might need a more robust synchronization mechanism.
+	time.Sleep(50 * time.Millisecond)
+
+	err := Publish(channel, message)
+	assert.NoError(t, err)
+
+	select {
+	case gotMessage := <-received:
+		assert.Equal(t, message, gotMessage)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for message")
+	}
+}
+
 func TestStreamFunctions(t *testing.T) {
 	stream := "test:stream"
 	group := "test:group"
