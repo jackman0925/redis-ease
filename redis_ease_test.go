@@ -267,3 +267,46 @@ func TestStreamClaim(t *testing.T) {
 	err = StreamAck(stream, group, claimedMsgs[0].ID)
 	assert.NoError(t, err)
 }
+
+// mockLogger is for testing the logging functionality.
+type mockLogger struct {
+	lastMessage string
+	lastLevel   string
+}
+
+func (m *mockLogger) Errorf(format string, v ...interface{}) {
+	m.lastMessage = fmt.Sprintf(format, v...)
+	m.lastLevel = "error"
+}
+func (m *mockLogger) Warnf(format string, v ...interface{}) {
+	m.lastMessage = fmt.Sprintf(format, v...)
+	m.lastLevel = "warn"
+}
+func (m *mockLogger) Infof(format string, v ...interface{}) {
+	m.lastMessage = fmt.Sprintf(format, v...)
+	m.lastLevel = "info"
+}
+func (m *mockLogger) Debugf(format string, v ...interface{}) {
+	m.lastMessage = fmt.Sprintf(format, v...)
+	m.lastLevel = "debug"
+}
+
+func TestCustomLogger(t *testing.T) {
+	// Temporarily replace the package-level logger to test its usage
+	originalLogger := logger
+	defer func() { logger = originalLogger }()
+
+	mock := &mockLogger{}
+	logger = mock
+
+	// This action should trigger an error log inside StreamClaim because the stream does not exist,
+	// and therefore XPendingExt will return an error.
+	_, err := StreamClaim("non_existent_stream_for_log_test", "group", "consumer", 1*time.Second)
+
+	// We expect an error from the function itself
+	assert.Error(t, err)
+
+	// And we assert that our mock logger was called with the correct level and message
+	assert.Equal(t, "error", mock.lastLevel)
+	assert.Contains(t, mock.lastMessage, "Failed to check for pending messages")
+}
