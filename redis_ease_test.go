@@ -370,10 +370,9 @@ func TestContextCancellation(t *testing.T) {
 }
 
 func TestInitPanics(t *testing.T) {
-	originalOnce := once
 	originalClient := client
 	defer func() {
-		once = originalOnce
+		once = sync.Once{}
 		client = originalClient
 	}()
 

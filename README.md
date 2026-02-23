@@ -45,20 +45,24 @@ After initialization, you can call the helper functions from anywhere in your pr
 
 ```go
 import (
+    "context"
     "fmt"
+    "time"
     "github.com/jackman0925/redis-ease"
     "github.com/redis/go-redis/v9"
 )
 
 func someFunction() {
+    ctx := context.Background()
+
     // Set a value
-    err := redis_ease.Set("user:1", "John Doe", 10*time.Minute)
+    err := redis_ease.Set(ctx, "user:1", "John Doe", 10*time.Minute)
     if err != nil {
         panic(err)
     }
 
     // Get a value
-    name, err := redis_ease.Get("user:1")
+    name, err := redis_ease.Get(ctx, "user:1")
     if err != nil {
         if err == redis.Nil {
             fmt.Println("user:1 does not exist")
@@ -82,7 +86,7 @@ msg := map[string]interface{}{
     "order_id": 12345,
     "user_id":  "user-abc",
 }
-msgID, err := redis_ease.StreamAdd("orders", msg)
+msgID, err := redis_ease.StreamAdd(context.Background(), "orders", msg)
 if err != nil {
     panic(err)
 }
@@ -96,7 +100,7 @@ This would typically run in a background goroutine.
 func processOrders() {
     for {
         // 1. Read one message from the 'orders' stream.
-        msg, err := redis_ease.StreamConsume("orders", "processing_group", "consumer_1")
+        msg, err := redis_ease.StreamConsume(context.Background(), "orders", "processing_group", "consumer_1")
         if err != nil {
             fmt.Println("Error consuming from stream:", err)
             continue
@@ -106,7 +110,7 @@ func processOrders() {
         fmt.Printf("Processing message %s: %v\n", msg.ID, msg.Values)
 
         // 3. Acknowledge the message so it's not processed again
-        err = redis_ease.StreamAck("orders", "processing_group", msg.ID)
+        err = redis_ease.StreamAck(context.Background(), "orders", "processing_group", msg.ID)
         if err != nil {
             fmt.Println("Error acknowledging message:", err)
         }
@@ -121,12 +125,14 @@ If a consumer crashes before acknowledging a message, it becomes "pending". A re
 ```go
 // This recovery process can run periodically in a separate goroutine
 func recoverFailedMessages() {
+    ctx := context.Background()
+
     for {
         // Check for stale messages every 5 minutes
         time.Sleep(5 * time.Minute)
 
         // Claim messages that have been idle for at least 5 minutes
-        staleMsgs, err := redis_ease.StreamClaim("orders", "processing_group", "recovery_consumer", 5*time.Minute)
+        staleMsgs, err := redis_ease.StreamClaim(ctx, "orders", "processing_group", "recovery_consumer", 5*time.Minute)
         if err != nil {
             fmt.Println("Error claiming messages:", err)
             continue
@@ -140,7 +146,7 @@ func recoverFailedMessages() {
         for _, msg := range staleMsgs {
             fmt.Printf("Re-processing message %s: %v\n", msg.ID, msg.Values)
             // Your business logic here...
-            redis_ease.StreamAck("orders", "processing_group", msg.ID)
+            redis_ease.StreamAck(ctx, "orders", "processing_group", msg.ID)
         }
     }
 }
@@ -187,10 +193,13 @@ func listenForUpdates() {
 #### Publisher Example
 
 ```go
-import "github.com/jackman0925/redis-ease"
+import (
+    "context"
+    "github.com/jackman0925/redis-ease"
+)
 
 func sendUpdate() {
-    err := redis_ease.Publish("news", "A new blog post has been published!")
+    err := redis_ease.Publish(context.Background(), "news", "A new blog post has been published!")
     if err != nil {
         panic(err)
     }
@@ -265,32 +274,33 @@ redis_ease.Init(config)
 ### Initialization
 
 -   `Init(config Config)`: Initializes the global Redis client. Must be called once at application start.
+-   `Close() error`: Closes the Redis client, releasing connections.
 
 ### Key-Value Functions
 
--   `Set(key string, value interface{}, expiration time.Duration) error`
--   `Get(key string) (string, error)`
--   `Del(keys ...string) (int64, error)`
--   `HSet(key string, values ...interface{}) (int64, error)`
--   `HGet(key, field string) (string, error)`
--   `Exists(keys ...string) (int64, error)`
+-   `Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error`
+-   `Get(ctx context.Context, key string) (string, error)`
+-   `Del(ctx context.Context, keys ...string) (int64, error)`
+-   `HSet(ctx context.Context, key string, values ...interface{}) (int64, error)`
+-   `HGet(ctx context.Context, key, field string) (string, error)`
+-   `Exists(ctx context.Context, keys ...string) (int64, error)`
 
 ### Pub/Sub Functions
 
--   `Publish(channel string, message interface{}) error`: Publishes a message to a channel.
+-   `Publish(ctx context.Context, channel string, message interface{}) error`: Publishes a message to a channel.
 -   `Subscribe(ctx context.Context, channel string, handler func(msg *redis.Message))`: Subscribes to a channel and processes messages with a handler function. Runs in a background goroutine.
 
 ### Stream (Queue) Functions
 
--   `StreamAdd(streamName string, values map[string]interface{}) (string, error)`: Adds a message to the stream.
--   `StreamConsume(streamName, groupName, consumerName string) (*redis.XMessage, error)`: Reads a single message, blocking forever until one is available.
--   `StreamConsumeAdvanced(streamName, groupName, consumerName string, block time.Duration, count int64) ([]redis.XMessage, error)`: Reads multiple messages with a specific blocking timeout.
--   `StreamAck(streamName, groupName, messageID string) error`: Acknowledges a message as successfully processed.
--   `StreamClaim(streamName, groupName, consumerName string, minIdleTime time.Duration) ([]redis.XMessage, error)`: Claims messages that were left pending by a failed consumer.
+-   `StreamAdd(ctx context.Context, streamName string, values map[string]interface{}) (string, error)`: Adds a message to the stream.
+-   `StreamConsume(ctx context.Context, streamName, groupName, consumerName string) (*redis.XMessage, error)`: Reads a single message, blocking forever until one is available.
+-   `StreamConsumeAdvanced(ctx context.Context, streamName, groupName, consumerName string, block time.Duration, count int64) ([]redis.XMessage, error)`: Reads multiple messages with a specific blocking timeout.
+-   `StreamAck(ctx context.Context, streamName, groupName, messageID string) error`: Acknowledges a message as successfully processed.
+-   `StreamClaim(ctx context.Context, streamName, groupName, consumerName string, minIdleTime time.Duration) ([]redis.XMessage, error)`: Claims messages that were left pending by a failed consumer.
 
 ### Advanced Usage
 
--   `GetClient() redis.Cmdable`: For advanced use cases, you can retrieve the underlying `go-redis` client to access features like transactions and scripting.
+-   `GetClient() redis.UniversalClient`: For advanced use cases, you can retrieve the underlying `go-redis` client to access features like transactions and scripting.
 
 ## 📄 License
 
