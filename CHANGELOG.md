@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `StreamClaim` 增加基于 `XAutoClaim` 的实现以防止潜在的并发竞态条件。
+- 增加 `Close()` 函数以优雅地关闭客户端并释放底层连接资源。
 - 增加日志接口 (`Logger`) 和日志级别 (`LogLevel`)，允许用户注入自定义的日志记录器。
 - 新增 `LogLevelNone` 级别以完全禁用日志。
 - 新增 `discardLogger` 实现，用于忽略所有日志输出。
 
 ### Changed
+- 升级 Redis 客户端初始化逻辑：底层不再使用 `redis.NewClient` 或 `redis.NewClusterClient`，而是采用 `redis.NewUniversalClient` 自动适配单机、哨兵及集群模式。
+- 对所有的读写及订阅 API (如 `Get`、`Set`、`Del`、`Publish`、`Subscribe`、`Stream*` 等) 增加了 `ctx context.Context` 参数支持，便于调用方做超时控制和链路取消。
 - 重构了内置的默认日志记录器，以实现更灵活的日志级别控制。
 - `Init` 函数现在支持日志记录器的配置。
 
