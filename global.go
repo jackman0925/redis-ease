@@ -13,14 +13,14 @@ var defaultState struct {
 	client *Client
 }
 
-// Init initializes the package-level compatibility client and panics on failure.
+// Init 初始化包级兼容客户端，失败时触发 panic。
 func Init(cfg Config) {
 	if err := InitWithError(cfg); err != nil {
 		panic(err)
 	}
 }
 
-// InitWithError initializes the package-level compatibility client once.
+// InitWithError 初始化一次包级兼容客户端。
 func InitWithError(cfg Config) error {
 	defaultState.Lock()
 	defer defaultState.Unlock()
@@ -35,7 +35,7 @@ func InitWithError(cfg Config) error {
 	return nil
 }
 
-// GetClient returns the underlying package-level go-redis client.
+// GetClient 返回包级客户端底层的 go-redis 客户端。
 func GetClient() redis.UniversalClient {
 	c := mustDefaultClient()
 	rc, err := c.rawClient()
@@ -45,7 +45,7 @@ func GetClient() redis.UniversalClient {
 	return rc
 }
 
-// Close closes and clears the package-level client. It is idempotent.
+// Close 关闭并清除包级客户端；该操作是幂等的。
 func Close() error {
 	defaultState.Lock()
 	c := defaultState.client
@@ -57,7 +57,7 @@ func Close() error {
 	return c.Close()
 }
 
-// Shutdown closes the package-level client and waits for subscriptions to exit.
+// Shutdown 关闭包级客户端并等待订阅退出。
 func Shutdown(ctx context.Context) error {
 	defaultState.Lock()
 	c := defaultState.client

@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Benchmarks are opt-in to avoid impacting default test runs.
-// Set REDIS_BENCH=1 to enable.
+// 基准测试默认不运行，避免影响常规测试。
+// 设置 REDIS_BENCH=1 后启用。
 
 func benchClient(b *testing.B) *Client {
 	addr := os.Getenv("REDIS_BENCH_ADDR")

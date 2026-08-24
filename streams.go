@@ -9,14 +9,14 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// StreamAdd appends a message and returns its Redis-generated ID.
+// StreamAdd 追加消息并返回 Redis 生成的消息 ID。
 func (c *Client) StreamAdd(ctx context.Context, streamName string, values map[string]interface{}) (string, error) {
 	return runOperation(ctx, c, "StreamAdd", true, func(ctx context.Context, rc redis.UniversalClient) (string, error) {
 		return rc.XAdd(ctx, &redis.XAddArgs{Stream: streamName, Values: values}).Result()
 	})
 }
 
-// StreamConsume blocks until one new consumer-group message is available.
+// StreamConsume 阻塞等待一条新的消费者组消息。
 func (c *Client) StreamConsume(ctx context.Context, streamName, groupName, consumerName string) (*redis.XMessage, error) {
 	return runOperation(ctx, c, "StreamConsume", false, func(ctx context.Context, rc redis.UniversalClient) (*redis.XMessage, error) {
 		if err := ensureGroup(ctx, rc, c.logger, streamName, groupName); err != nil {
@@ -36,7 +36,7 @@ func (c *Client) StreamConsume(ctx context.Context, streamName, groupName, consu
 	})
 }
 
-// StreamConsumeAdvanced reads up to count new messages and returns nil, nil on timeout.
+// StreamConsumeAdvanced 最多读取 count 条新消息，超时时返回 nil, nil。
 func (c *Client) StreamConsumeAdvanced(ctx context.Context, streamName, groupName, consumerName string, block time.Duration, count int64) ([]redis.XMessage, error) {
 	if count <= 0 {
 		return nil, errors.New("redis-ease: stream consume count must be positive")
@@ -59,7 +59,7 @@ func (c *Client) StreamConsumeAdvanced(ctx context.Context, streamName, groupNam
 	})
 }
 
-// StreamAck acknowledges a processed message.
+// StreamAck 确认一条已处理的消息。
 func (c *Client) StreamAck(ctx context.Context, streamName, groupName, messageID string) error {
 	_, err := runOperation(ctx, c, "StreamAck", true, func(ctx context.Context, rc redis.UniversalClient) (struct{}, error) {
 		return struct{}{}, rc.XAck(ctx, streamName, groupName, messageID).Err()
@@ -67,7 +67,7 @@ func (c *Client) StreamAck(ctx context.Context, streamName, groupName, messageID
 	return err
 }
 
-// StreamClaim claims up to 100 stale pending messages for consumerName.
+// StreamClaim 为 consumerName 认领最多 100 条长时间未确认的消息。
 func (c *Client) StreamClaim(ctx context.Context, streamName, groupName, consumerName string, minIdleTime time.Duration) ([]redis.XMessage, error) {
 	return runOperation(ctx, c, "StreamClaim", true, func(ctx context.Context, rc redis.UniversalClient) ([]redis.XMessage, error) {
 		messages, _, err := rc.XAutoClaim(ctx, &redis.XAutoClaimArgs{
@@ -78,14 +78,14 @@ func (c *Client) StreamClaim(ctx context.Context, streamName, groupName, consume
 	})
 }
 
-// StreamPendingSummary returns pending-message aggregate information.
+// StreamPendingSummary 返回待处理消息的汇总信息。
 func (c *Client) StreamPendingSummary(ctx context.Context, streamName, groupName string) (*redis.XPending, error) {
 	return runOperation(ctx, c, "StreamPendingSummary", true, func(ctx context.Context, rc redis.UniversalClient) (*redis.XPending, error) {
 		return rc.XPending(ctx, streamName, groupName).Result()
 	})
 }
 
-// StreamPendingList returns pending entries, optionally filtered by consumer.
+// StreamPendingList 返回待处理消息列表，并可按消费者筛选。
 func (c *Client) StreamPendingList(ctx context.Context, streamName, groupName, start, end string, count int64, consumer string) ([]redis.XPendingExt, error) {
 	if count <= 0 {
 		return nil, errors.New("redis-ease: pending list count must be positive")
@@ -98,7 +98,7 @@ func (c *Client) StreamPendingList(ctx context.Context, streamName, groupName, s
 	})
 }
 
-// StreamPendingCount returns the number of pending entries.
+// StreamPendingCount 返回待处理消息数量。
 func (c *Client) StreamPendingCount(ctx context.Context, streamName, groupName string) (int64, error) {
 	return runOperation(ctx, c, "StreamPendingCount", true, func(ctx context.Context, rc redis.UniversalClient) (int64, error) {
 		summary, err := rc.XPending(ctx, streamName, groupName).Result()

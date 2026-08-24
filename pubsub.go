@@ -10,12 +10,12 @@ import (
 
 var errSubscriptionClosed = errors.New("redis-ease: subscription channel closed")
 
-// Subscribe starts a managed asynchronous subscription.
+// Subscribe 启动一个由客户端管理的异步订阅。
 func (c *Client) Subscribe(ctx context.Context, channel string, handler func(msg *redis.Message)) {
 	c.SubscribeWithReady(ctx, channel, handler, nil)
 }
 
-// SubscribeWithReady calls ready after initial subscription and subsequent resubscriptions.
+// SubscribeWithReady 在首次订阅和后续重新订阅成功后调用 ready。
 func (c *Client) SubscribeWithReady(ctx context.Context, channel string, handler func(msg *redis.Message), ready func()) {
 	if handler == nil {
 		c.logger.Errorf("subscription handler for %s must not be nil", channel)

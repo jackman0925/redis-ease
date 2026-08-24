@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Client is an instance-scoped Redis client.
+// Client 是实例级 Redis 客户端。
 type Client struct {
 	mu              sync.RWMutex
 	redis           redis.UniversalClient
@@ -33,7 +33,7 @@ func newClient(rc redis.UniversalClient, cfg Config, logger Logger) *Client {
 	}
 }
 
-// Close cancels managed subscriptions and closes Redis connections. It is idempotent.
+// Close 取消托管订阅并关闭 Redis 连接；该操作是幂等的。
 func (c *Client) Close() error {
 	if c == nil {
 		return nil
@@ -51,7 +51,7 @@ func (c *Client) Close() error {
 	return rc.Close()
 }
 
-// Shutdown closes the client and waits for subscription goroutines or ctx cancellation.
+// Shutdown 关闭客户端，并等待订阅 goroutine 退出或 ctx 被取消。
 func (c *Client) Shutdown(ctx context.Context) error {
 	err := c.Close()
 	done := make(chan struct{})

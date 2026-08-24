@@ -8,12 +8,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// MetricsCollector observes command latency and the original Redis error.
+// MetricsCollector 用于观测命令耗时和原始 Redis 错误。
 type MetricsCollector interface {
 	ObserveDuration(op string, d time.Duration, err error)
 }
 
-// Hook wraps commands and can propagate tracing state through context.
+// Hook 包装命令，并可通过 context 传递链路追踪状态。
 type Hook interface {
 	Before(ctx context.Context, op string) context.Context
 	After(ctx context.Context, op string, err error, duration time.Duration)

@@ -19,68 +19,68 @@ var (
 	ErrNotInitialized     = errors.New("redis-ease: default client is not initialized")
 )
 
-// Config holds Redis connection and redis-ease behavior settings.
+// Config 包含 Redis 连接参数和 redis-ease 行为配置。
 type Config struct {
-	// Addresses contains single-node, cluster seed, or Sentinel addresses.
+	// Addresses 包含单机地址、集群种子地址或 Sentinel 地址。
 	Addresses []string
-	// Username and Password configure Redis ACL authentication.
+	// Username 和 Password 用于配置 Redis ACL 认证。
 	Username string
 	Password string
-	// DB selects the database for single-node and Sentinel clients.
+	// DB 为单机和 Sentinel 客户端选择数据库。
 	DB int
-	// ClientName is assigned to each Redis connection.
+	// ClientName 会设置到每个 Redis 连接。
 	ClientName string
 
-	// DefaultTimeout applies when a non-blocking command context has no deadline.
+	// DefaultTimeout 用于未设置截止时间的非阻塞命令 context。
 	DefaultTimeout time.Duration
-	// InitTimeout limits the constructor health check. The default is five seconds.
+	// InitTimeout 限制构造阶段的健康检查时间，默认为五秒。
 	InitTimeout time.Duration
-	// DialTimeout, ReadTimeout, and WriteTimeout configure socket operations.
+	// DialTimeout、ReadTimeout 和 WriteTimeout 用于配置套接字操作超时。
 	DialTimeout  time.Duration
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 
-	// PoolSize is the maximum base connection-pool size.
+	// PoolSize 是基础连接池的最大连接数。
 	PoolSize int
-	// PoolTimeout limits how long a caller waits for an available connection.
+	// PoolTimeout 限制调用方等待可用连接的时间。
 	PoolTimeout time.Duration
-	// MinIdleConns and MaxIdleConns bound idle pool connections.
+	// MinIdleConns 和 MaxIdleConns 限制连接池中的空闲连接数。
 	MinIdleConns int
 	MaxIdleConns int
-	// MaxActiveConns limits active connections; zero uses the go-redis default.
+	// MaxActiveConns 限制活跃连接数；零值使用 go-redis 默认配置。
 	MaxActiveConns int
-	// ConnMaxIdleTime and ConnMaxLifetime control connection recycling.
+	// ConnMaxIdleTime 和 ConnMaxLifetime 控制连接回收。
 	ConnMaxIdleTime time.Duration
 	ConnMaxLifetime time.Duration
 
-	// MaxRetries configures go-redis command retries.
+	// MaxRetries 配置 go-redis 命令重试次数。
 	MaxRetries int
-	// MinRetryBackoff and MaxRetryBackoff bound command retry delays.
+	// MinRetryBackoff 和 MaxRetryBackoff 限制命令重试等待时间。
 	MinRetryBackoff time.Duration
 	MaxRetryBackoff time.Duration
 
-	// TLSConfig enables TLS when non-nil.
+	// TLSConfig 非空时启用 TLS。
 	TLSConfig *tls.Config
-	// MasterName enables Sentinel failover mode.
+	// MasterName 用于启用 Sentinel 故障转移模式。
 	MasterName string
-	// SentinelUsername and SentinelPassword authenticate to Sentinel.
+	// SentinelUsername 和 SentinelPassword 用于 Sentinel 认证。
 	SentinelUsername string
 	SentinelPassword string
-	// IsClusterMode forces cluster mode when only one seed address is supplied.
+	// IsClusterMode 在仅提供一个种子地址时强制使用集群模式。
 	IsClusterMode bool
 
-	// Metrics and Hook provide optional instrumentation.
+	// Metrics 和 Hook 提供可选的可观测能力。
 	Metrics MetricsCollector
 	Hook    Hook
-	// SubscribeRetry controls initial Pub/Sub establishment retries.
+	// SubscribeRetry 控制首次建立 Pub/Sub 订阅时的重试策略。
 	SubscribeRetry SubscribeRetryConfig
-	// Logger overrides the built-in logger.
+	// Logger 用于替换内置日志实现。
 	Logger Logger
-	// LogLevel defaults to LogLevelInfo; LogLevelNone disables built-in logging.
+	// LogLevel 默认为 LogLevelInfo；LogLevelNone 禁用内置日志。
 	LogLevel LogLevel
 }
 
-// NewClient constructs a client and panics if construction fails.
+// NewClient 创建客户端，创建失败时触发 panic。
 func NewClient(cfg Config) *Client {
 	c, err := NewClientWithError(cfg)
 	if err != nil {
@@ -89,7 +89,7 @@ func NewClient(cfg Config) *Client {
 	return c
 }
 
-// NewClientWithError constructs and verifies an instance-scoped client.
+// NewClientWithError 创建并验证实例级客户端。
 func NewClientWithError(cfg Config) (*Client, error) {
 	if err := validateConfig(cfg); err != nil {
 		return nil, err

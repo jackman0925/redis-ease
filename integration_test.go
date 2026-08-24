@@ -64,7 +64,7 @@ func TestTLSIntegration(t *testing.T) {
 		require.True(t, pool.AppendCertsFromPEM(pem))
 		tlsConfig.RootCAs = pool
 	} else if os.Getenv("REDIS_E2E_TLS_INSECURE") == "1" {
-		tlsConfig.InsecureSkipVerify = true // Explicit opt-in for local integration only.
+		tlsConfig.InsecureSkipVerify = true // 仅允许本地集成测试显式启用。
 	} else {
 		t.Skip("set REDIS_E2E_TLS_CA or REDIS_E2E_TLS_INSECURE=1")
 	}

@@ -2,25 +2,25 @@ package redis_ease
 
 import "log"
 
-// LogLevel represents the level of logging.
+// LogLevel 表示日志级别。
 type LogLevel int
 
 const (
-	// LogLevelDefault resolves to LogLevelInfo.
+	// LogLevelDefault 最终按 LogLevelInfo 处理。
 	LogLevelDefault LogLevel = iota
-	// LogLevelNone disables logging.
+	// LogLevelNone 禁用日志。
 	LogLevelNone
-	// LogLevelError logs only errors.
+	// LogLevelError 仅记录错误日志。
 	LogLevelError
-	// LogLevelWarn logs warnings and errors.
+	// LogLevelWarn 记录警告和错误日志。
 	LogLevelWarn
-	// LogLevelInfo logs info, warnings, and errors.
+	// LogLevelInfo 记录信息、警告和错误日志。
 	LogLevelInfo
-	// LogLevelDebug logs all messages including debug.
+	// LogLevelDebug 记录包括调试信息在内的全部日志。
 	LogLevelDebug
 )
 
-// Logger defines the interface for logging. This allows users to use their own logger.
+// Logger 定义日志接口，调用方可以接入自定义日志实现。
 type Logger interface {
 	Errorf(format string, v ...interface{})
 	Warnf(format string, v ...interface{})
@@ -28,7 +28,7 @@ type Logger interface {
 	Debugf(format string, v ...interface{})
 }
 
-// leveledLogger is a simple internal logger that writes to stdout.
+// leveledLogger 是向标准输出写入日志的内部简单实现。
 type leveledLogger struct {
 	level LogLevel
 }
@@ -57,7 +57,7 @@ func (l *leveledLogger) Debugf(format string, v ...interface{}) {
 	}
 }
 
-// discardLogger is a logger that outputs nothing.
+// discardLogger 是不产生任何输出的日志实现。
 type discardLogger struct{}
 
 func (l *discardLogger) Errorf(format string, v ...interface{}) {}

@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-// SubscribeRetryConfig controls initial subscription establishment retries.
+// SubscribeRetryConfig 控制首次建立订阅时的重试策略。
 type SubscribeRetryConfig struct {
 	Enabled    bool
 	MinBackoff time.Duration
 	MaxBackoff time.Duration
-	MaxRetries int // 0 means unlimited.
+	MaxRetries int // 0 表示无限重试。
 	Jitter     float64
 	OnRetry    func(attempt int, wait time.Duration, err error)
 }
