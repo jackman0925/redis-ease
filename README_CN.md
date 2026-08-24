@@ -1,5 +1,10 @@
 # Redis-Ease（中文说明）
 
+稳定性契约：[docs/STABILITY_V0.2.0.md](docs/STABILITY_V0.2.0.md)
+
+v0.2.0 升级说明：[docs/MIGRATION_V0.2.0.md](docs/MIGRATION_V0.2.0.md)
+配置参考：[docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+
 Redis-Ease 是一个轻量、易用的 Go Redis 封装库，基于 `go-redis`，提供统一的初始化、多实例客户端、常用命令封装、Streams 队列能力以及生产级可观测与重连配置。
 
 ## 特性
@@ -7,7 +12,7 @@ Redis-Ease 是一个轻量、易用的 Go Redis 封装库，基于 `go-redis`，
 - 简单配置，支持单机 / Sentinel / Cluster（UniversalClient）
 - 便捷封装：`Get/Set/Del/HSet/HGet/Exists` 等
 - Streams 队列：消费组、ACK、自动认领、pending 观测
-- Pub/Sub 支持重连、抖动回退、重连回调
+- Pub/Sub 建立后由 go-redis 自动重连；本库支持初始订阅重试与 ready 回调
 - 默认超时、连接池与重试配置
 - Metrics 与 Hook（Tracing）接入
 - 多实例客户端（推荐生产使用）
@@ -103,7 +108,7 @@ redis_ease.SubscribeWithReady(ctx, "news", handler, func() { ready <- struct{}{}
 <-ready
 ```
 
-重连配置：
+初始订阅重试配置：
 
 ```go
 config := redis_ease.Config{
@@ -138,6 +143,8 @@ defer client.Close()
 
 _ = client.Set(context.Background(), "k", "v", 0)
 ```
+
+服务优雅退出时可使用 `client.Shutdown(ctx)`，由调用方通过 `ctx` 控制最长等待时间。
 
 ## 连接/超时/池化配置
 
@@ -180,7 +187,13 @@ _ = redis_ease.InitWithError(config)
 ```sh
 go test ./...
 
-REDIS_BENCH=1 go test -run '^$' -bench . ./...
+REDIS_BENCH_ADDR=localhost:6379 go test -run '^$' -bench . ./...
+```
+
+完整质量门禁：
+
+```sh
+./scripts/check_quality.sh
 ```
 
 更多集成测试与环境变量请参考英文 `README.md` 中的 “Test & Bench Automation” 章节。

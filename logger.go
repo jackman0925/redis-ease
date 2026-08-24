@@ -6,8 +6,10 @@ import "log"
 type LogLevel int
 
 const (
+	// LogLevelDefault resolves to LogLevelInfo.
+	LogLevelDefault LogLevel = iota
 	// LogLevelNone disables logging.
-	LogLevelNone LogLevel = iota
+	LogLevelNone
 	// LogLevelError logs only errors.
 	LogLevelError
 	// LogLevelWarn logs warnings and errors.
@@ -62,3 +64,42 @@ func (l *discardLogger) Errorf(format string, v ...interface{}) {}
 func (l *discardLogger) Warnf(format string, v ...interface{})  {}
 func (l *discardLogger) Infof(format string, v ...interface{})  {}
 func (l *discardLogger) Debugf(format string, v ...interface{}) {}
+
+type panicSafeLogger struct {
+	logger Logger
+}
+
+func (l *panicSafeLogger) Errorf(format string, v ...interface{}) {
+	l.call(l.logger.Errorf, format, v...)
+}
+func (l *panicSafeLogger) Warnf(format string, v ...interface{}) {
+	l.call(l.logger.Warnf, format, v...)
+}
+func (l *panicSafeLogger) Infof(format string, v ...interface{}) {
+	l.call(l.logger.Infof, format, v...)
+}
+func (l *panicSafeLogger) Debugf(format string, v ...interface{}) {
+	l.call(l.logger.Debugf, format, v...)
+}
+
+func (l *panicSafeLogger) call(fn func(string, ...interface{}), format string, v ...interface{}) {
+	defer func() { _ = recover() }()
+	fn(format, v...)
+}
+
+func buildLogger(cfg Config) Logger {
+	if cfg.Logger != nil {
+		return &panicSafeLogger{logger: cfg.Logger}
+	}
+	level := cfg.LogLevel
+	if level == LogLevelDefault {
+		level = LogLevelInfo
+	}
+	if level == LogLevelNone {
+		return &discardLogger{}
+	}
+	if level < LogLevelError || level > LogLevelDebug {
+		level = LogLevelInfo
+	}
+	return &leveledLogger{level: level}
+}

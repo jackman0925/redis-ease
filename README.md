@@ -2,6 +2,11 @@
 
 中文文档：[README_CN.md](README_CN.md)
 
+Stability contract: [docs/STABILITY_V0.2.0.md](docs/STABILITY_V0.2.0.md)
+
+Migration guide: [docs/MIGRATION_V0.2.0.md](docs/MIGRATION_V0.2.0.md)
+Configuration reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+
 A lightweight, easy-to-use Go library for quick Redis integration. It acts as a simple wrapper around the powerful `go-redis/redis` client, allowing for effortless setup for both single-node and cluster deployments.
 
 ## ✨ Features
@@ -163,7 +168,8 @@ Use the Pub/Sub functions for real-time messaging between different parts of you
 
 The `Subscribe` function runs in a background goroutine. You can use a `context` to manage its lifecycle.
 
-To enable automatic reconnect, configure `SubscribeRetry` in `Config`.
+go-redis automatically reconnects and re-subscribes after establishment. `SubscribeRetry`
+controls retries while establishing the initial subscription.
 
 ```go
 import (
@@ -214,7 +220,7 @@ func sendUpdate() {
 
 ### 5. Logging Configuration
 
-By default, the library logs informational messages and errors to standard output. You can customize this behavior.
+By default, the library logs informational messages and errors through Go's standard logger. You can customize this behavior.
 
 #### Changing the Log Level
 
@@ -246,10 +252,10 @@ import (
 type MyLogger struct {
     *logrus.Logger
 }
-func (l *MyLogger) Errorf(format string, v ...interface{}) { l.Errorf(format, v...) }
-func (l *MyLogger) Warnf(format string, v ...interface{})  { l.Warnf(format, v...) }
-func (l *MyLogger) Infof(format string, v ...interface{})  { l.Infof(format, v...) }
-func (l *MyLogger) Debugf(format string, v ...interface{}) { l.Debugf(format, v...) }
+func (l *MyLogger) Errorf(format string, v ...interface{}) { l.Logger.Errorf(format, v...) }
+func (l *MyLogger) Warnf(format string, v ...interface{})  { l.Logger.Warnf(format, v...) }
+func (l *MyLogger) Infof(format string, v ...interface{})  { l.Logger.Infof(format, v...) }
+func (l *MyLogger) Debugf(format string, v ...interface{}) { l.Logger.Debugf(format, v...) }
 
 
 func main() {
@@ -345,7 +351,9 @@ Default timeout only applies to non-blocking calls. It does not affect `Subscrib
 -   `NewClient(config Config) *Client`: Creates a new instance client (panics on failure).
 -   `NewClientWithError(config Config) (*Client, error)`: Creates a new instance client with error return.
 -   `Close() error`: Closes the Redis client, releasing connections.
-    -   `(*Client).Close() error`: Closes the instance client, releasing connections.
+-   `Shutdown(ctx context.Context) error`: Closes the default client and waits for subscriptions.
+    -   `(*Client).Close() error`: Closes the instance client without waiting for callbacks.
+    -   `(*Client).Shutdown(ctx) error`: Closes and waits with a caller deadline.
 
 ### Key-Value Functions
 
@@ -461,16 +469,22 @@ Default unit tests:
 go test ./...
 ```
 
+Complete local quality gate:
+
+```sh
+./scripts/check_quality.sh
+```
+
 Benchmarks (opt-in):
 
 ```sh
-REDIS_BENCH=1 go test -run '^$' -bench . ./...
+REDIS_BENCH_ADDR=localhost:6379 go test -run '^$' -bench . ./...
 ```
 
 Reconnect integration test:
 
 ```sh
-REDIS_E2E_RECONNECT=1 \\
+REDIS_E2E_RECONNECT_ADDR=localhost:6379 \\
 REDIS_E2E_RECONNECT_CMD="redis-cli shutdown; redis-server --daemonize yes" \\
 go test -run TestSubscribeReconnectIntegration ./...
 ```
@@ -478,7 +492,6 @@ go test -run TestSubscribeReconnectIntegration ./...
 TLS integration test:
 
 ```sh
-REDIS_E2E_TLS=1 \\
 REDIS_E2E_TLS_ADDR=localhost:6380 \\
 REDIS_E2E_TLS_CA=/path/to/ca.pem \\
 go test -run TestTLSIntegration ./...
@@ -487,7 +500,6 @@ go test -run TestTLSIntegration ./...
 Cluster integration test:
 
 ```sh
-REDIS_E2E_CLUSTER=1 \\
 REDIS_E2E_CLUSTER_ADDRS="localhost:7000,localhost:7001,localhost:7002" \\
 go test -run TestClusterIntegration ./...
 ```
@@ -495,7 +507,6 @@ go test -run TestClusterIntegration ./...
 Sentinel integration test:
 
 ```sh
-REDIS_E2E_SENTINEL=1 \\
 REDIS_E2E_SENTINEL_ADDRS="localhost:26379,localhost:26380" \\
 REDIS_E2E_SENTINEL_MASTER=mymaster \\
 go test -run TestSentinelIntegration ./...
@@ -540,12 +551,13 @@ Use hooks to wrap operations, for example to start and finish tracing spans.
 ```go
 type MyHook struct{}
 
-func (h *MyHook) Before(op string) {
-    // Start span
+func (h *MyHook) Before(ctx context.Context, op string) context.Context {
+    // Start span and return its context.
+    return ctx
 }
 
-func (h *MyHook) After(op string, err error, d time.Duration) {
-    // End span and record error
+func (h *MyHook) After(ctx context.Context, op string, err error, d time.Duration) {
+    // End span and record error.
 }
 
 config := redis_ease.Config{
@@ -573,8 +585,6 @@ import (
 type OtelHook struct {
     tracer trace.Tracer
 }
-
-type spanKey struct{}
 
 func NewOtelHook() *OtelHook {
     return &OtelHook{tracer: otel.Tracer("redis-ease")}
